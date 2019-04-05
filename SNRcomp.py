@@ -63,6 +63,8 @@ FLUX=S1400*pow((FREQ/1400.0),SPINDEX)
 #Expected average profile SNR
 expSNR = FLUX * pow(10,-3) * pow(Np*Ttime*BW,0.5) / (1.16*SEFD)
 
+
+
 print "Flux at 1400 MHz : " + str(S1400) + " mJy"
 print "Flux at " + str(FREQ)  + " MHz : " + str(FLUX) + " mJy"
 print "Expected SNR : " + str(expSNR)
@@ -79,5 +81,3 @@ cmd = "psrplot -N 1x2 -p flux -p freq  " + \
 
 print cmd	
 os.system(cmd)
-
-
