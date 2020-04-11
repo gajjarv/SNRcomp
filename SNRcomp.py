@@ -1,11 +1,13 @@
-#!/bin/python 
+#!/bin/python
 import os,sys
 import pandas as pd
 # ----- Config ----- #
 Np=2
 Ttime = 5*60 # In seconds
 Wfrac = 5 # Assuming 5% pulse width
+mW = 0.05 # Fraction of number of channels used for median estimation for zapping
 csvfile = "/home/obs/target_logs/PULSARS"
+#csvfile="test.csv"
 # ------------------ # 
 
 filfile = sys.argv[1]
@@ -32,8 +34,17 @@ os.system(cmd)
 cmd="dspsr -E tmp.par %s -O %s" % (filfile,fname)
 os.system(cmd)
 
-cmd="paz -r -L -b -d -m %s.ar" % (fname)
+#cmd="paz -r -L -b -d -m %s.ar" % (fname)
+cmd="psredit -c 'nchan' %s.ar  | awk -F= '{print$2}'" % (fname)
+nchans=int(os.popen(cmd).readline().strip())
+
+cmd="paz -r -R %d -L -b -d -m %s.ar > out " % (int(nchans*mW),fname)
 os.system(cmd)
+
+#Get number of RFI zapped channels
+cmd="grep 'paz -z' out | awk -F-z '{print$2}' | awk '{print NF}'"
+rfichan=int(os.popen(cmd).readline().strip())
+os.system("rm out")
 
 cmd="psrstat -jDF -c 'snr=modular:{on=minimum:{find_min=0,smooth:width=0.05}}' -c snr %s.ar " % (fname)
 SNR=float(os.popen(cmd).readline().strip().split("=")[1])
@@ -52,6 +63,9 @@ BW=float(os.popen(cmd).readline().strip().split("=")[1])
 BWMHz = BW
 BW=abs(BW*pow(10,6)) # In Hz
 
+if rfichan>1:
+	BW=BW-rfichan*(BW/nchans)	
+
 #Get MJD
 cmd = "header %s -tstart" % (filfile)
 MJD = float(os.popen(cmd).readline().strip())
@@ -61,8 +75,10 @@ BWfact = 0.9
 #SEFD
 if FREQ<2000: 
 	SEFD = 10 # For GBT-L band
-	BWfact = 0.6  # For GBT-BL only uses about 60% of the band
-if FREQ>2000 and FREQ<3000: SEFD = 12 # GBT-S band
+	BWfact = 0.6  # For GBT-BL only uses about 60% of the band (considering RFI rejection and bandshape)
+if FREQ>2000 and FREQ<3000: 
+	SEFD = 12 # GBT-S band
+	BWfact=0.75 # GBT-BL S-band with notch filter and RFI rejection
 if FREQ>3000 and FREQ<8000: SEFD = 10 # GBT-C band
 if FREQ>8000 and FREQ<12000: SEFD = 15 # GBT-X band
 if FREQ>12000 and FREQ<18000: SEFD = 15 # GBT Ku-band
@@ -99,6 +115,11 @@ print "Observed SNR : " + str(SNR)
 
 #Place holder right now
 detection="*"
+
+if SNR>expSNR:
+	detection="1"
+elif (expSNR-SNR)/expSNR<0.75: #If the difference was around 75% level of the expected flux
+	detection="1"
 
 #pdiff = abs((expSNR-SNR)/SNR)
 
